@@ -255,9 +255,16 @@ update_gost() {
   
   # 先下载新版本
   echo "⬇️ 下载最新版本..."
-  curl -L "$DOWNLOAD_URL" -o "$INSTALL_DIR/gost.new"
-  if [[ ! -f "$INSTALL_DIR/gost.new" || ! -s "$INSTALL_DIR/gost.new" ]]; then
+  rm -f "$INSTALL_DIR/gost.new"
+  if ! curl --fail --location --retry 3 "$DOWNLOAD_URL" -o "$INSTALL_DIR/gost.new"; then
     echo "❌ 下载失败。"
+    rm -f "$INSTALL_DIR/gost.new"
+    return 1
+  fi
+  chmod +x "$INSTALL_DIR/gost.new"
+  if ! "$INSTALL_DIR/gost.new" -V >/dev/null 2>&1; then
+    echo "❌ 下载的 gost 无法在当前系统运行，请检查系统架构或发布文件。"
+    rm -f "$INSTALL_DIR/gost.new"
     return 1
   fi
 
@@ -269,7 +276,6 @@ update_gost() {
 
   # 替换文件
   mv "$INSTALL_DIR/gost.new" "$INSTALL_DIR/gost"
-  chmod +x "$INSTALL_DIR/gost"
   
   # 打印版本
   echo "🔎 新版本：$($INSTALL_DIR/gost -V)"
