@@ -1,5 +1,5 @@
 # 多阶段构建 - 构建阶段
-FROM node:20.19.0 AS builder
+FROM --platform=$BUILDPLATFORM node:20.19.0 AS builder
 
 WORKDIR /app
 
@@ -18,4 +18,4 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"] 
+CMD ["nginx", "-g", "daemon off;"]
