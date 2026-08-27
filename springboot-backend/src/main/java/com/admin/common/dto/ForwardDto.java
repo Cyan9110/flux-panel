@@ -23,7 +23,7 @@ public class ForwardDto {
     private String strategy;
 
     @Min(value = 0, message = "PROXY Protocol版本无效")
-    @Max(value = 2, message = "PROXY Protocol版本无效")
+    @Max(value = 3, message = "PROXY Protocol版本无效")
     private Integer proxyProtocol = 0;
     
     /**

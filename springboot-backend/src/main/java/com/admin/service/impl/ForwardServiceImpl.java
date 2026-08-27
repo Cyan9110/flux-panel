@@ -92,7 +92,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
 
         // 5. 创建并保存Forward对象
-        Forward forward = createForwardEntity(forwardDto, currentUser, portAllocation);
+        Forward forward = createForwardEntity(forwardDto, currentUser, portAllocation, tunnel);
         if (!this.save(forward)) {
             return R.err("端口转发创建失败");
         }
@@ -272,7 +272,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             Integer limiter = userTunnel == null ? null : userTunnel.getSpeedId();
             Integer previousProxyProtocol = forward.getProxyProtocol();
             Integer previousStatus = forward.getStatus();
-            forward.setProxyProtocol(dto.getProxyProtocol());
+            forward.setProxyProtocol(tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? dto.getProxyProtocol() : 0);
             forward.setUpdatedTime(System.currentTimeMillis());
 
             R gostResult = updateGostServices(forward, tunnel, limiter, nodeInfo, userTunnel);
@@ -994,7 +994,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     /**
      * 创建Forward实体对象
      */
-    private Forward createForwardEntity(ForwardDto forwardDto, UserInfo currentUser, PortAllocation portAllocation) {
+    private Forward createForwardEntity(ForwardDto forwardDto, UserInfo currentUser, PortAllocation portAllocation, Tunnel tunnel) {
         Forward forward = new Forward();
         // 先复制DTO的属性，再设置其他属性，避免被覆盖
         BeanUtils.copyProperties(forwardDto, forward);
@@ -1003,6 +1003,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         forward.setOutPort(portAllocation.getOutPort());
         forward.setUserId(currentUser.getUserId());
         forward.setUserName(currentUser.getUserName());
+        forward.setProxyProtocol(tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? forwardDto.getProxyProtocol() : 0);
         forward.setCreatedTime(System.currentTimeMillis());
         forward.setUpdatedTime(System.currentTimeMillis());
         return forward;
@@ -1014,6 +1015,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     private Forward updateForwardEntity(ForwardUpdateDto forwardUpdateDto, Forward existForward, Tunnel tunnel) {
         Forward forward = new Forward();
         BeanUtils.copyProperties(forwardUpdateDto, forward);
+        forward.setProxyProtocol(tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? forwardUpdateDto.getProxyProtocol() : 0);
 
         // 处理端口分配逻辑
         boolean tunnelChanged = !existForward.getTunnelId().equals(forwardUpdateDto.getTunnelId());
@@ -1241,7 +1243,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
      * 创建远程服务
      */
     private R createRemoteService(Node outNode, String serviceName, Forward forward, String protocol, String interfaceName) {
-        GostDto result = GostUtil.AddRemoteService(outNode.getId(), serviceName, forward.getOutPort(), forward.getRemoteAddr(), protocol, forward.getStrategy(), interfaceName);
+        GostDto result = GostUtil.AddRemoteService(outNode.getId(), serviceName, forward.getOutPort(), forward.getRemoteAddr(), protocol, forward.getStrategy(), interfaceName, forward.getProxyProtocol());
         return isGostOperationSuccess(result) ? R.ok() : R.err(result.getMsg());
     }
 
@@ -1274,9 +1276,9 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
      */
     private R updateRemoteService(Node outNode, String serviceName, Forward forward, String protocol, String interfaceName) {
         // 创建新远程服务
-        GostDto createResult = GostUtil.UpdateRemoteService(outNode.getId(), serviceName, forward.getOutPort(), forward.getRemoteAddr(), protocol, forward.getStrategy(), interfaceName);
+        GostDto createResult = GostUtil.UpdateRemoteService(outNode.getId(), serviceName, forward.getOutPort(), forward.getRemoteAddr(), protocol, forward.getStrategy(), interfaceName, forward.getProxyProtocol());
         if (createResult.getMsg().contains(GOST_NOT_FOUND_MSG)) {
-            createResult = GostUtil.AddRemoteService(outNode.getId(), serviceName, forward.getOutPort(), forward.getRemoteAddr(), protocol, forward.getStrategy(), interfaceName);
+            createResult = GostUtil.AddRemoteService(outNode.getId(), serviceName, forward.getOutPort(), forward.getRemoteAddr(), protocol, forward.getStrategy(), interfaceName, forward.getProxyProtocol());
         }
         return isGostOperationSuccess(createResult) ? R.ok() : R.err(createResult.getMsg());
     }

@@ -37,7 +37,7 @@ CREATE TABLE `forward` (
   `out_port` int(10) DEFAULT NULL,
   `remote_addr` longtext NOT NULL,
   `strategy` varchar(100) NOT NULL DEFAULT 'fifo',
-  `proxy_protocol` int(10) NOT NULL DEFAULT '0' COMMENT 'PROXY Protocol版本：0关闭，1=v1，2=v2',
+  `proxy_protocol` int(10) NOT NULL DEFAULT '0' COMMENT 'PROXY Protocol模式：0关闭，1=v1 TCP，2=v2 TCP+UDP，3=v2 TCP',
   `interface_name` varchar(200) DEFAULT NULL,
   `in_flow` bigint(20) NOT NULL DEFAULT '0',
   `out_flow` bigint(20) NOT NULL DEFAULT '0',

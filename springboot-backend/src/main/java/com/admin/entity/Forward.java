@@ -36,6 +36,7 @@ public class Forward extends BaseEntity{
 
     private String strategy;
 
+    /** 0关闭，1=v1 TCP，2=v2 TCP+UDP，3=v2 TCP */
     private Integer proxyProtocol;
 
     private Long inFlow;

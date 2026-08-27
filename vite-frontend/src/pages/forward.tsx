@@ -51,6 +51,7 @@ interface Forward {
   id: number;
   name: string;
   tunnelId: number;
+  tunnelType: number;
   tunnelName: string;
   inIp: string;
   inPort: number;
@@ -71,6 +72,7 @@ interface Forward {
 interface Tunnel {
   id: number;
   name: string;
+  type: number;
   inNodePortSta?: number;
   inNodePortEnd?: number;
 }
@@ -525,7 +527,7 @@ export default function ForwardPage() {
       remoteAddr: forward.remoteAddr.split(',').join('\n'),
       interfaceName: forward.interfaceName || '',
       strategy: forward.strategy || 'fifo',
-      proxyProtocol: forward.proxyProtocol || 0
+      proxyProtocol: forward.tunnelType === 2 ? (forward.proxyProtocol || 0) : 0
     });
     const tunnel = tunnels.find(t => t.id === forward.tunnelId);
     setSelectedTunnel(tunnel || null);
@@ -576,7 +578,11 @@ export default function ForwardPage() {
   const handleTunnelChange = (tunnelId: string) => {
     const tunnel = tunnels.find(t => t.id === parseInt(tunnelId));
     setSelectedTunnel(tunnel || null);
-    setForm(prev => ({ ...prev, tunnelId: parseInt(tunnelId) }));
+    setForm(prev => ({
+      ...prev,
+      tunnelId: parseInt(tunnelId),
+      proxyProtocol: tunnel?.type === 2 ? prev.proxyProtocol : 0
+    }));
   };
 
   // 提交表单
@@ -1355,8 +1361,8 @@ export default function ForwardPage() {
               <Chip color={strategyDisplay.color as any} variant="flat" size="sm" className="text-xs">
                 {strategyDisplay.text}
               </Chip>
-              <Chip variant="flat" size="sm" className="text-xs" color={forward.proxyProtocol ? 'secondary' : 'default'}>
-                {forward.proxyProtocol ? `PROXY v${forward.proxyProtocol}` : 'PROXY 关闭'}
+              <Chip variant="flat" size="sm" className="text-xs" color={forward.tunnelType === 2 && forward.proxyProtocol ? 'secondary' : 'default'}>
+                {forward.tunnelType !== 2 ? 'PROXY 不适用' : forward.proxyProtocol === 1 ? 'PROXY v1 (TCP)' : forward.proxyProtocol === 2 ? 'PROXY v2 (TCP+UDP)' : forward.proxyProtocol === 3 ? 'PROXY v2 (TCP)' : 'PROXY 关闭'}
               </Chip>
               <div className="flex items-center gap-1">
                 <Chip variant="flat" size="sm" className="text-xs" color="primary">
@@ -1781,7 +1787,7 @@ export default function ForwardPage() {
                       </Select>
                     )}
 
-                    <Select
+                    {selectedTunnel?.type === 2 && <Select
                       label="PROXY Protocol"
                       selectedKeys={[form.proxyProtocol.toString()]}
                       onSelectionChange={(keys) => {
@@ -1791,12 +1797,14 @@ export default function ForwardPage() {
                         }
                       }}
                       variant="bordered"
-                      description="仅对 TCP 生效；目标服务必须支持并启用相同版本，否则连接数据会被误解析"
+                      description="仅隧道转发生效；TCP 携带 PROXY 头，TCP+UDP 模式的 UDP 为普通转发"
                     >
                       <SelectItem key="0">关闭</SelectItem>
-                      <SelectItem key="1">PROXY Protocol v1</SelectItem>
-                      <SelectItem key="2">PROXY Protocol v2</SelectItem>
+                      <SelectItem key="1">v1（TCP）</SelectItem>
+                      <SelectItem key="2">v2（TCP + UDP）</SelectItem>
+                      <SelectItem key="3">v2（TCP）</SelectItem>
                     </Select>
+                    }
                   </div>
                 </ModalBody>
                 <ModalFooter>
@@ -1843,11 +1851,12 @@ export default function ForwardPage() {
                       }
                     }}
                     variant="bordered"
-                    description="仅对 TCP 生效，目标服务必须支持相同版本"
+                    description="仅修改隧道转发；端口转发会保持关闭"
                   >
                     <SelectItem key="0">关闭 PROXY Protocol</SelectItem>
-                    <SelectItem key="1">启用 PROXY Protocol v1</SelectItem>
-                    <SelectItem key="2">启用 PROXY Protocol v2</SelectItem>
+                    <SelectItem key="1">v1（TCP）</SelectItem>
+                    <SelectItem key="2">v2（TCP + UDP）</SelectItem>
+                    <SelectItem key="3">v2（TCP）</SelectItem>
                   </Select>
                   <Alert color="warning" variant="flat">
                     目标服务未启用对应协议时，连接数据可能无法正常解析。

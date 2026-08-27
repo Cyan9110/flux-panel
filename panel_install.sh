@@ -686,7 +686,7 @@ UPDATE \`tunnel\`
 SET \`traffic_ratio\` = 1.0
 WHERE \`traffic_ratio\` IS NULL;
 
--- forward 表：添加 proxy_protocol 字段（0关闭，1=v1，2=v2）
+-- forward 表：添加 proxy_protocol 字段（0关闭，1=v1 TCP，2=v2 TCP+UDP，3=v2 TCP）
 SET @sql = (
   SELECT IF(
     NOT EXISTS (
@@ -696,7 +696,7 @@ SET @sql = (
         AND table_name = 'forward'
         AND column_name = 'proxy_protocol'
     ),
-    'ALTER TABLE \`forward\` ADD COLUMN \`proxy_protocol\` INT(10) NOT NULL DEFAULT 0 COMMENT "PROXY Protocol版本：0关闭，1=v1，2=v2" AFTER \`strategy\`;',
+    'ALTER TABLE \`forward\` ADD COLUMN \`proxy_protocol\` INT(10) NOT NULL DEFAULT 0 COMMENT "PROXY Protocol模式：0关闭，1=v1 TCP，2=v2 TCP+UDP，3=v2 TCP" AFTER \`strategy\`;',
     'SELECT "Column \`proxy_protocol\` already exists in \`forward\`";'
   )
 );
@@ -706,7 +706,13 @@ DEALLOCATE PREPARE stmt;
 
 UPDATE \`forward\`
 SET \`proxy_protocol\` = 0
-WHERE \`proxy_protocol\` IS NULL OR \`proxy_protocol\` NOT IN (0, 1, 2);
+WHERE \`proxy_protocol\` IS NULL OR \`proxy_protocol\` NOT IN (0, 1, 2, 3);
+
+-- 端口转发不支持 PROXY Protocol，仅隧道转发保留该设置
+UPDATE \`forward\` f
+INNER JOIN \`tunnel\` t ON f.\`tunnel_id\` = t.\`id\`
+SET f.\`proxy_protocol\` = 0
+WHERE t.\`type\` = 1 AND f.\`proxy_protocol\` <> 0;
 
 -- forward 表：修改 remote_addr 字段类型为 longtext
 SET @sql = (

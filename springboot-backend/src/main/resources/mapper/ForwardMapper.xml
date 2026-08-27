@@ -25,7 +25,7 @@
             t.name AS tunnelName,
             t.in_ip AS inIp,
             t.out_ip AS outIp,
-            t.type,
+            t.type AS tunnelType,
             t.protocol
         FROM 
             forward f
@@ -58,7 +58,7 @@
             t.name AS tunnelName,
             t.in_ip AS inIp,
             t.out_ip AS outIp,
-            t.type,
+            t.type AS tunnelType,
             t.protocol
         FROM 
             forward f

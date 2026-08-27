@@ -74,6 +74,9 @@ public class ForwardWithTunnelDto {
      */
     private Integer tunnelId;
 
+    /** 隧道类型：1端口转发，2隧道转发 */
+    private Integer tunnelType;
+
     /**
      * 入站流量（字节）
      */

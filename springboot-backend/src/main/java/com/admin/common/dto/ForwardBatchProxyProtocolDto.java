@@ -18,6 +18,6 @@ public class ForwardBatchProxyProtocolDto {
 
     @NotNull(message = "PROXY Protocol版本不能为空")
     @Min(value = 0, message = "PROXY Protocol版本无效")
-    @Max(value = 2, message = "PROXY Protocol版本无效")
+    @Max(value = 3, message = "PROXY Protocol版本无效")
     private Integer proxyProtocol;
 }

@@ -34,7 +34,7 @@ public class GostUtil {
 
     public static GostDto AddService(Long node_id, String name, Integer in_port, Integer limiter, String remoteAddr, Integer fow_type, Tunnel tunnel, String strategy, String interfaceName, Integer proxyProtocol) {
         JSONArray services = new JSONArray();
-        String[] protocols = {"tcp", "udp"};
+        String[] protocols = shouldIncludeUdp(fow_type, proxyProtocol) ? new String[]{"tcp", "udp"} : new String[]{"tcp"};
         for (String protocol : protocols) {
             JSONObject service = createServiceConfig(name, in_port, limiter, remoteAddr, protocol, fow_type, tunnel, strategy, interfaceName, proxyProtocol);
             services.add(service);
@@ -43,25 +43,43 @@ public class GostUtil {
     }
 
     public static GostDto UpdateService(Long node_id, String name, Integer in_port, Integer limiter, String remoteAddr, Integer fow_type, Tunnel tunnel, String strategy, String interfaceName, Integer proxyProtocol) {
-        JSONArray services = new JSONArray();
-        String[] protocols = {"tcp", "udp"};
+        GostDto result = null;
+        String[] protocols = shouldIncludeUdp(fow_type, proxyProtocol) ? new String[]{"tcp", "udp"} : new String[]{"tcp"};
         for (String protocol : protocols) {
+            JSONArray services = new JSONArray();
             JSONObject service = createServiceConfig(name, in_port, limiter, remoteAddr, protocol, fow_type, tunnel, strategy, interfaceName, proxyProtocol);
             services.add(service);
+            result = WebSocketServer.send_msg(node_id, services, "UpdateService");
+            if (isNotFound(result)) {
+                result = WebSocketServer.send_msg(node_id, services, "AddService");
+            }
+            if (!isSuccess(result)) {
+                return result;
+            }
         }
-        return WebSocketServer.send_msg(node_id, services, "UpdateService");
+
+        if (!shouldIncludeUdp(fow_type, proxyProtocol)) {
+            GostDto deleteUdpResult = deleteSingleService(node_id, name + "_udp");
+            if (!isSuccess(deleteUdpResult) && !isNotFound(deleteUdpResult)) {
+                return deleteUdpResult;
+            }
+        }
+        return result;
     }
 
     public static GostDto DeleteService(Long node_id, String name) {
-        JSONObject data = new JSONObject();
-        JSONArray services = new JSONArray();
-        services.add(name + "_tcp");
-        services.add(name + "_udp");
-        data.put("services", services);
-        return WebSocketServer.send_msg(node_id, data, "DeleteService");
+        GostDto tcpResult = deleteSingleService(node_id, name + "_tcp");
+        GostDto udpResult = deleteSingleService(node_id, name + "_udp");
+        if (!isSuccess(tcpResult) && !isNotFound(tcpResult)) {
+            return tcpResult;
+        }
+        if (!isSuccess(udpResult) && !isNotFound(udpResult)) {
+            return udpResult;
+        }
+        return isSuccess(tcpResult) ? tcpResult : udpResult;
     }
 
-    public static GostDto AddRemoteService(Long node_id, String name, Integer out_port, String remoteAddr,  String protocol, String strategy, String interfaceName) {
+    public static GostDto AddRemoteService(Long node_id, String name, Integer out_port, String remoteAddr, String protocol, String strategy, String interfaceName, Integer proxyProtocol) {
         JSONObject data = new JSONObject();
         data.put("name", name + "_tls");
         data.put("addr", ":" + out_port);
@@ -75,6 +93,7 @@ public class GostUtil {
 
         JSONObject handler = new JSONObject();
         handler.put("type", "relay");
+        addProxyProtocolMetadata(handler, proxyProtocolVersion(proxyProtocol));
         data.put("handler", handler);
         JSONObject listener = new JSONObject();
         listener.put("type", protocol);
@@ -107,7 +126,7 @@ public class GostUtil {
         return WebSocketServer.send_msg(node_id, services, "AddService");
     }
 
-    public static GostDto UpdateRemoteService(Long node_id, String name, Integer out_port, String remoteAddr,String protocol, String strategy, String interfaceName) {
+    public static GostDto UpdateRemoteService(Long node_id, String name, Integer out_port, String remoteAddr, String protocol, String strategy, String interfaceName, Integer proxyProtocol) {
         JSONObject data = new JSONObject();
         data.put("name", name + "_tls");
         data.put("addr", ":" + out_port);
@@ -121,6 +140,7 @@ public class GostUtil {
 
         JSONObject handler = new JSONObject();
         handler.put("type", "relay");
+        addProxyProtocolMetadata(handler, proxyProtocolVersion(proxyProtocol));
         data.put("handler", handler);
         JSONObject listener = new JSONObject();
         listener.put("type", protocol);
@@ -321,9 +341,6 @@ public class GostUtil {
 
         // 配置处理器
         JSONObject handler = createHandler(protocol, name, fow_type);
-        if (Objects.equals(protocol, "tcp")) {
-            addProxyProtocolMetadata(handler, proxyProtocol);
-        }
         service.put("handler", handler);
 
         // 配置监听器
@@ -398,12 +415,46 @@ public class GostUtil {
     }
 
     private static void addProxyProtocolMetadata(JSONObject handler, Integer proxyProtocol) {
-        if (proxyProtocol == null || proxyProtocol <= 0) {
+        if (!isProxyProtocolEnabled(proxyProtocol)) {
             return;
         }
         JSONObject metadata = new JSONObject();
         metadata.put("proxyProtocol", proxyProtocol);
         handler.put("metadata", metadata);
+    }
+
+    private static boolean isProxyProtocolEnabled(Integer proxyProtocol) {
+        return proxyProtocol != null && proxyProtocol >= 1 && proxyProtocol <= 3;
+    }
+
+    private static Integer proxyProtocolVersion(Integer proxyProtocol) {
+        if (!isProxyProtocolEnabled(proxyProtocol)) {
+            return 0;
+        }
+        return proxyProtocol == 1 ? 1 : 2;
+    }
+
+    private static boolean shouldIncludeUdp(Integer forwardType, Integer proxyProtocol) {
+        if (isPortForwarding(forwardType)) {
+            return true;
+        }
+        return proxyProtocol == null || proxyProtocol == 0 || proxyProtocol == 2;
+    }
+
+    private static GostDto deleteSingleService(Long nodeId, String serviceName) {
+        JSONObject data = new JSONObject();
+        JSONArray services = new JSONArray();
+        services.add(serviceName);
+        data.put("services", services);
+        return WebSocketServer.send_msg(nodeId, data, "DeleteService");
+    }
+
+    private static boolean isSuccess(GostDto result) {
+        return result != null && Objects.equals(result.getCode(), 0);
+    }
+
+    private static boolean isNotFound(GostDto result) {
+        return result != null && StringUtils.containsIgnoreCase(result.getMsg(), "not found");
     }
 
 }
