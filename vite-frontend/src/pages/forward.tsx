@@ -56,6 +56,7 @@ interface Forward {
   remoteAddr: string;
   interfaceName?: string;
   strategy: string;
+  proxyProtocol: number;
   status: number;
   inFlow: number;
   outFlow: number;
@@ -82,6 +83,7 @@ interface ForwardForm {
   remoteAddr: string;
   interfaceName?: string;
   strategy: string;
+  proxyProtocol: number;
 }
 
 interface AddressItem {
@@ -191,7 +193,8 @@ export default function ForwardPage() {
     inPort: null,
     remoteAddr: '',
     interfaceName: '',
-    strategy: 'fifo'
+    strategy: 'fifo',
+    proxyProtocol: 0
   });
   
   // 表单验证错误
@@ -444,7 +447,8 @@ export default function ForwardPage() {
       inPort: null,
       remoteAddr: '',
       interfaceName: '',
-      strategy: 'fifo'
+      strategy: 'fifo',
+      proxyProtocol: 0
     });
     setSelectedTunnel(null);
     setErrors({});
@@ -462,7 +466,8 @@ export default function ForwardPage() {
       inPort: forward.inPort,
       remoteAddr: forward.remoteAddr.split(',').join('\n'),
       interfaceName: forward.interfaceName || '',
-      strategy: forward.strategy || 'fifo'
+      strategy: forward.strategy || 'fifo',
+      proxyProtocol: forward.proxyProtocol || 0
     });
     const tunnel = tunnels.find(t => t.id === forward.tunnelId);
     setSelectedTunnel(tunnel || null);
@@ -541,7 +546,8 @@ export default function ForwardPage() {
           inPort: form.inPort,
           remoteAddr: processedRemoteAddr,
           interfaceName: form.interfaceName,
-          strategy: addressCount > 1 ? form.strategy : 'fifo'
+          strategy: addressCount > 1 ? form.strategy : 'fifo',
+          proxyProtocol: form.proxyProtocol
         };
         res = await updateForward(updateData);
       } else {
@@ -552,7 +558,8 @@ export default function ForwardPage() {
           inPort: form.inPort,
           remoteAddr: processedRemoteAddr,
           interfaceName: form.interfaceName,
-          strategy: addressCount > 1 ? form.strategy : 'fifo'
+          strategy: addressCount > 1 ? form.strategy : 'fifo',
+          proxyProtocol: form.proxyProtocol
         };
         res = await createForward(createData);
       }
@@ -1657,6 +1664,23 @@ export default function ForwardPage() {
                         <SelectItem key="hash" >哈希模式 - IP哈希</SelectItem>
                       </Select>
                     )}
+
+                    <Select
+                      label="PROXY Protocol"
+                      selectedKeys={[form.proxyProtocol.toString()]}
+                      onSelectionChange={(keys) => {
+                        const selectedKey = Array.from(keys)[0] as string;
+                        if (selectedKey) {
+                          setForm(prev => ({ ...prev, proxyProtocol: Number(selectedKey) }));
+                        }
+                      }}
+                      variant="bordered"
+                      description="仅对 TCP 生效；目标服务必须支持并启用相同版本，否则连接数据会被误解析"
+                    >
+                      <SelectItem key="0">关闭</SelectItem>
+                      <SelectItem key="1">PROXY Protocol v1</SelectItem>
+                      <SelectItem key="2">PROXY Protocol v2</SelectItem>
+                    </Select>
                   </div>
                 </ModalBody>
                 <ModalFooter>
