@@ -41,7 +41,7 @@ services:
       - gost-network
 
   backend:
-    image: brunuhville/springboot-backend:latest
+    image: ghcr.io/cyan9110/flux-panel-backend:latest
     container_name: springboot-backend
     restart: unless-stopped
     environment:
@@ -69,7 +69,7 @@ services:
       start_period: 90s
 
   frontend:
-    image: brunuhville/vite-frontend:latest
+    image: ghcr.io/cyan9110/flux-panel-frontend:latest
     container_name: vite-frontend
     restart: unless-stopped
     ports:

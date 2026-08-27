@@ -231,7 +231,7 @@ EOF
   echo "🎉 部署完成"
   echo "🌐 访问地址: http://服务器IP:$FRONTEND_PORT"
   echo "📖 部署完成后请阅读下使用文档。不要上去就是一顿操作"
-  echo "📚 文档地址: https://brunuhville.github.io/flux-panel/guide.html"
+  echo "📚 文档地址: https://cyan9110.github.io/flux-panel/guide.html"
   echo "💡 默认管理员账号: admin_user / admin_user"
   echo "⚠️  登录后请立即修改默认密码！"
 
