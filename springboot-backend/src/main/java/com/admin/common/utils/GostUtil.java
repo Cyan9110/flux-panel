@@ -93,7 +93,6 @@ public class GostUtil {
 
         JSONObject handler = new JSONObject();
         handler.put("type", "relay");
-        addProxyProtocolMetadata(handler, proxyProtocolVersion(proxyProtocol));
         data.put("handler", handler);
         JSONObject listener = new JSONObject();
         listener.put("type", protocol);
@@ -140,7 +139,6 @@ public class GostUtil {
 
         JSONObject handler = new JSONObject();
         handler.put("type", "relay");
-        addProxyProtocolMetadata(handler, proxyProtocolVersion(proxyProtocol));
         data.put("handler", handler);
         JSONObject listener = new JSONObject();
         listener.put("type", protocol);
@@ -341,6 +339,9 @@ public class GostUtil {
 
         // 配置处理器
         JSONObject handler = createHandler(protocol, name, fow_type);
+        if (Objects.equals(protocol, "tcp") && isTunnelForwarding(fow_type)) {
+            addProxyProtocolMetadata(handler, proxyProtocolVersion(proxyProtocol));
+        }
         service.put("handler", handler);
 
         // 配置监听器
