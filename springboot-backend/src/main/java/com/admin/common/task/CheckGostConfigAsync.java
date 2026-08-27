@@ -87,11 +87,16 @@ public class CheckGostConfigAsync {
             String prefix = forward.getId() + "_" + forward.getUserId() + "_";
             boolean missing = false;
             if (Objects.equals(tunnel.getInNodeId(), node.getId())) {
-                boolean missingMainService = !containsName(serviceNames, prefix, "_tcp")
-                        || !containsName(serviceNames, prefix, "_udp");
+                ConfigItem tcpService = findItem(gostConfig.getServices(), prefix, "_tcp");
+                ConfigItem udpService = findItem(gostConfig.getServices(), prefix, "_udp");
+                boolean expectUdp = shouldIncludeUdp(tunnel, forward.getProxyProtocol());
+                boolean missingMainService = tcpService == null || (expectUdp && udpService == null);
+                boolean unexpectedUdpService = !expectUdp && udpService != null;
+                boolean proxyProtocolMismatch = tcpService != null
+                        && getProxyProtocol(tcpService) != expectedProxyProtocol(tunnel, forward.getProxyProtocol());
                 boolean missingChain = tunnel.getType() == 2
                         && !containsName(chainNames, prefix, "_chains");
-                missing = missingMainService || missingChain;
+                missing = missingMainService || unexpectedUdpService || proxyProtocolMismatch || missingChain;
             }
             if (tunnel.getType() == 2 && Objects.equals(tunnel.getOutNodeId(), node.getId())) {
                 missing = missing || !containsName(serviceNames, prefix, "_tls");
@@ -121,6 +126,55 @@ public class CheckGostConfigAsync {
 
     private boolean containsName(Set<String> names, String prefix, String suffix) {
         return names.stream().anyMatch(name -> name.startsWith(prefix) && name.endsWith(suffix));
+    }
+
+    private ConfigItem findItem(List<ConfigItem> items, String prefix, String suffix) {
+        if (items == null) {
+            return null;
+        }
+        return items.stream()
+                .filter(Objects::nonNull)
+                .filter(item -> item.getName() != null
+                        && item.getName().startsWith(prefix)
+                        && item.getName().endsWith(suffix))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean shouldIncludeUdp(Tunnel tunnel, Integer proxyProtocol) {
+        return tunnel.getType() != 2
+                || proxyProtocol == null
+                || proxyProtocol == 0
+                || proxyProtocol == 2;
+    }
+
+    private int expectedProxyProtocol(Tunnel tunnel, Integer proxyProtocol) {
+        if (tunnel.getType() != 2 || proxyProtocol == null || proxyProtocol == 0) {
+            return 0;
+        }
+        return proxyProtocol == 1 ? 1 : 2;
+    }
+
+    private int getProxyProtocol(ConfigItem service) {
+        if (service.getHandler() == null) {
+            return 0;
+        }
+        Object metadataObject = service.getHandler().get("metadata");
+        if (!(metadataObject instanceof Map)) {
+            return 0;
+        }
+        Object value = ((Map<?, ?>) metadataObject).get("proxyProtocol");
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        if (value != null) {
+            try {
+                return Integer.parseInt(value.toString());
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+        return 0;
     }
 
     /**

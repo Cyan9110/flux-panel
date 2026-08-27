@@ -1787,9 +1787,10 @@ export default function ForwardPage() {
                       </Select>
                     )}
 
-                    {Number(selectedTunnel?.type) === 2 && <Select
+                    <Select
                       label="PROXY Protocol"
                       selectedKeys={[form.proxyProtocol.toString()]}
+                      isDisabled={!selectedTunnel || Number(selectedTunnel.type) !== 2}
                       onSelectionChange={(keys) => {
                         const selectedKey = Array.from(keys)[0] as string;
                         if (selectedKey) {
@@ -1797,14 +1798,17 @@ export default function ForwardPage() {
                         }
                       }}
                       variant="bordered"
-                      description="仅隧道转发生效；TCP 携带 PROXY 头，TCP+UDP 模式的 UDP 为普通转发"
+                      description={!selectedTunnel
+                        ? '请先选择隧道；仅隧道转发支持 PROXY Protocol'
+                        : Number(selectedTunnel.type) !== 2
+                          ? '端口转发不支持 PROXY Protocol'
+                          : 'TCP 携带 PROXY 头，TCP+UDP 模式的 UDP 为普通转发'}
                     >
                       <SelectItem key="0">关闭</SelectItem>
                       <SelectItem key="1">v1（TCP）</SelectItem>
                       <SelectItem key="2">v2（TCP + UDP）</SelectItem>
                       <SelectItem key="3">v2（TCP）</SelectItem>
                     </Select>
-                    }
                   </div>
                 </ModalBody>
                 <ModalFooter>

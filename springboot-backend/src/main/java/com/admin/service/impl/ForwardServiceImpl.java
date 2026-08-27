@@ -224,6 +224,11 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             return R.err(nodeInfo.getErrorMessage());
         }
 
+        // 先保存期望配置，避免节点配置巡检在下发期间按数据库旧值覆盖本次修改。
+        if (!this.updateById(updatedForward)) {
+            return R.err("端口转发更新失败");
+        }
+
         // 8. 调用Gost服务更新转发
         R gostResult;
         if (tunnelChanged) {
@@ -235,6 +240,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
 
         if (gostResult.getCode() != 0) {
+            this.updateById(existForward);
             return gostResult;
         }
         updatedForward.setStatus(1);
@@ -275,17 +281,20 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             forward.setProxyProtocol(tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? dto.getProxyProtocol() : 0);
             forward.setUpdatedTime(System.currentTimeMillis());
 
+            // 先保存期望配置，避免异步节点巡检按旧数据库值覆盖刚下发的配置。
+            if (!this.updateById(forward)) {
+                forward.setProxyProtocol(previousProxyProtocol);
+                forward.setStatus(previousStatus);
+                failures.add(batchFailure(id, "数据库更新失败"));
+                continue;
+            }
+
             R gostResult = updateGostServices(forward, tunnel, limiter, nodeInfo, userTunnel);
             if (gostResult.getCode() != 0) {
                 forward.setProxyProtocol(previousProxyProtocol);
                 forward.setStatus(previousStatus);
                 this.updateById(forward);
                 failures.add(batchFailure(id, gostResult.getMsg()));
-                continue;
-            }
-
-            if (!this.updateById(forward)) {
-                failures.add(batchFailure(id, "数据库更新失败"));
                 continue;
             }
             successCount++;
