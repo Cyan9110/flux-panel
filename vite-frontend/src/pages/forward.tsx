@@ -517,6 +517,7 @@ export default function ForwardPage() {
 
   // 编辑转发
   const handleEdit = (forward: Forward) => {
+    const tunnel = tunnels.find(t => Number(t.id) === Number(forward.tunnelId));
     setIsEdit(true);
     setForm({
       id: forward.id,
@@ -527,9 +528,8 @@ export default function ForwardPage() {
       remoteAddr: forward.remoteAddr.split(',').join('\n'),
       interfaceName: forward.interfaceName || '',
       strategy: forward.strategy || 'fifo',
-      proxyProtocol: Number(forward.tunnelType) === 2 ? (forward.proxyProtocol || 0) : 0
+      proxyProtocol: Number(tunnel?.type) === 2 ? (forward.proxyProtocol || 0) : 0
     });
-    const tunnel = tunnels.find(t => t.id === forward.tunnelId);
     setSelectedTunnel(tunnel || null);
     setErrors({});
     setModalOpen(true);

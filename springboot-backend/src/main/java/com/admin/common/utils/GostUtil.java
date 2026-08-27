@@ -451,7 +451,7 @@ public class GostUtil {
     }
 
     private static boolean isSuccess(GostDto result) {
-        return result != null && Objects.equals(result.getCode(), 0);
+        return result != null && Objects.equals(result.getMsg(), "OK");
     }
 
     private static boolean isNotFound(GostDto result) {
