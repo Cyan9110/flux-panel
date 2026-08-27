@@ -89,11 +89,11 @@ public class CheckGostConfigAsync {
             if (Objects.equals(tunnel.getInNodeId(), node.getId())) {
                 ConfigItem tcpService = findItem(gostConfig.getServices(), prefix, "_tcp");
                 ConfigItem udpService = findItem(gostConfig.getServices(), prefix, "_udp");
-                boolean expectUdp = shouldIncludeUdp(tunnel, forward.getProxyProtocol());
+                boolean expectUdp = shouldIncludeUdp(forward.getProxyProtocol());
                 boolean missingMainService = tcpService == null || (expectUdp && udpService == null);
                 boolean unexpectedUdpService = !expectUdp && udpService != null;
                 boolean proxyProtocolMismatch = tcpService != null
-                        && getProxyProtocol(tcpService) != expectedProxyProtocol(tunnel, forward.getProxyProtocol());
+                        && getProxyProtocol(tcpService) != expectedProxyProtocol(forward.getProxyProtocol());
                 boolean missingChain = tunnel.getType() == 2
                         && !containsName(chainNames, prefix, "_chains");
                 missing = missingMainService || unexpectedUdpService || proxyProtocolMismatch || missingChain;
@@ -141,15 +141,14 @@ public class CheckGostConfigAsync {
                 .orElse(null);
     }
 
-    private boolean shouldIncludeUdp(Tunnel tunnel, Integer proxyProtocol) {
-        return tunnel.getType() != 2
-                || proxyProtocol == null
+    private boolean shouldIncludeUdp(Integer proxyProtocol) {
+        return proxyProtocol == null
                 || proxyProtocol == 0
                 || proxyProtocol == 2;
     }
 
-    private int expectedProxyProtocol(Tunnel tunnel, Integer proxyProtocol) {
-        if (tunnel.getType() != 2 || proxyProtocol == null || proxyProtocol == 0) {
+    private int expectedProxyProtocol(Integer proxyProtocol) {
+        if (proxyProtocol == null || proxyProtocol == 0) {
             return 0;
         }
         return proxyProtocol == 1 ? 1 : 2;

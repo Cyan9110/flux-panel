@@ -34,7 +34,7 @@ public class GostUtil {
 
     public static GostDto AddService(Long node_id, String name, Integer in_port, Integer limiter, String remoteAddr, Integer fow_type, Tunnel tunnel, String strategy, String interfaceName, Integer proxyProtocol) {
         JSONArray services = new JSONArray();
-        String[] protocols = shouldIncludeUdp(fow_type, proxyProtocol) ? new String[]{"tcp", "udp"} : new String[]{"tcp"};
+        String[] protocols = shouldIncludeUdp(proxyProtocol) ? new String[]{"tcp", "udp"} : new String[]{"tcp"};
         for (String protocol : protocols) {
             JSONObject service = createServiceConfig(name, in_port, limiter, remoteAddr, protocol, fow_type, tunnel, strategy, interfaceName, proxyProtocol);
             services.add(service);
@@ -44,7 +44,7 @@ public class GostUtil {
 
     public static GostDto UpdateService(Long node_id, String name, Integer in_port, Integer limiter, String remoteAddr, Integer fow_type, Tunnel tunnel, String strategy, String interfaceName, Integer proxyProtocol) {
         GostDto result = null;
-        String[] protocols = shouldIncludeUdp(fow_type, proxyProtocol) ? new String[]{"tcp", "udp"} : new String[]{"tcp"};
+        String[] protocols = shouldIncludeUdp(proxyProtocol) ? new String[]{"tcp", "udp"} : new String[]{"tcp"};
         for (String protocol : protocols) {
             JSONArray services = new JSONArray();
             JSONObject service = createServiceConfig(name, in_port, limiter, remoteAddr, protocol, fow_type, tunnel, strategy, interfaceName, proxyProtocol);
@@ -58,7 +58,7 @@ public class GostUtil {
             }
         }
 
-        if (!shouldIncludeUdp(fow_type, proxyProtocol)) {
+        if (!shouldIncludeUdp(proxyProtocol)) {
             GostDto deleteUdpResult = deleteSingleService(node_id, name + "_udp");
             if (!isSuccess(deleteUdpResult) && !isNotFound(deleteUdpResult)) {
                 return deleteUdpResult;
@@ -339,7 +339,7 @@ public class GostUtil {
 
         // 配置处理器
         JSONObject handler = createHandler(protocol, name, fow_type);
-        if (Objects.equals(protocol, "tcp") && isTunnelForwarding(fow_type)) {
+        if (Objects.equals(protocol, "tcp")) {
             addProxyProtocolMetadata(handler, proxyProtocolVersion(proxyProtocol));
         }
         service.put("handler", handler);
@@ -435,10 +435,7 @@ public class GostUtil {
         return proxyProtocol == 1 ? 1 : 2;
     }
 
-    private static boolean shouldIncludeUdp(Integer forwardType, Integer proxyProtocol) {
-        if (isPortForwarding(forwardType)) {
-            return true;
-        }
+    private static boolean shouldIncludeUdp(Integer proxyProtocol) {
         return proxyProtocol == null || proxyProtocol == 0 || proxyProtocol == 2;
     }
 

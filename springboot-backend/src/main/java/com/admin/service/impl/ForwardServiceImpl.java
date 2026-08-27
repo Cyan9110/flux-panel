@@ -278,7 +278,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             Integer limiter = userTunnel == null ? null : userTunnel.getSpeedId();
             Integer previousProxyProtocol = forward.getProxyProtocol();
             Integer previousStatus = forward.getStatus();
-            forward.setProxyProtocol(tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? dto.getProxyProtocol() : 0);
+            forward.setProxyProtocol(dto.getProxyProtocol());
             forward.setUpdatedTime(System.currentTimeMillis());
 
             // 先保存期望配置，避免异步节点巡检按旧数据库值覆盖刚下发的配置。
@@ -1012,7 +1012,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         forward.setOutPort(portAllocation.getOutPort());
         forward.setUserId(currentUser.getUserId());
         forward.setUserName(currentUser.getUserName());
-        forward.setProxyProtocol(tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? forwardDto.getProxyProtocol() : 0);
+        forward.setProxyProtocol(forwardDto.getProxyProtocol());
         forward.setCreatedTime(System.currentTimeMillis());
         forward.setUpdatedTime(System.currentTimeMillis());
         return forward;
@@ -1024,7 +1024,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     private Forward updateForwardEntity(ForwardUpdateDto forwardUpdateDto, Forward existForward, Tunnel tunnel) {
         Forward forward = new Forward();
         BeanUtils.copyProperties(forwardUpdateDto, forward);
-        forward.setProxyProtocol(tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD ? forwardUpdateDto.getProxyProtocol() : 0);
+        forward.setProxyProtocol(forwardUpdateDto.getProxyProtocol());
 
         // 处理端口分配逻辑
         boolean tunnelChanged = !existForward.getTunnelId().equals(forwardUpdateDto.getTunnelId());

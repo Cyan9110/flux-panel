@@ -708,12 +708,6 @@ UPDATE \`forward\`
 SET \`proxy_protocol\` = 0
 WHERE \`proxy_protocol\` IS NULL OR \`proxy_protocol\` NOT IN (0, 1, 2, 3);
 
--- 端口转发不支持 PROXY Protocol，仅隧道转发保留该设置
-UPDATE \`forward\` f
-INNER JOIN \`tunnel\` t ON f.\`tunnel_id\` = t.\`id\`
-SET f.\`proxy_protocol\` = 0
-WHERE t.\`type\` = 1 AND f.\`proxy_protocol\` <> 0;
-
 -- forward 表：修改 remote_addr 字段类型为 longtext
 SET @sql = (
   SELECT IF(
