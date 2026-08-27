@@ -1,6 +1,6 @@
 name: Build and publish Docker images
 
-# Publishes the images consumed by docker-compose-v4.yml and docker-compose-v6.yml.
+# Builds and publishes the images consumed by both Docker Compose variants.
 
 on:
   push:
