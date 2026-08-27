@@ -13,7 +13,7 @@ API_KEY=""
 DOMAIN_ID=""
 TARGET_HOST=""
 
-INTERVAL=10
+INTERVAL=20
 WANIPSITE="https://api.ipify.org"
 
 # =========================================================
@@ -144,24 +144,91 @@ check_ipv4() {
 # =========================
 
 get_wan_ip() {
-    local IP
+    local IP=""
+    local TOKEN=""
+    local ERR=""
 
-    IP=$(curl \
-        -4 \
-        -sS \
-        --connect-timeout 5 \
-        --max-time 8 \
-        "$WANIPSITE" \
-        2>/dev/null
-    ) || return 1
+    # =====================================================
+    # 1. 优先通过 AWS EC2 IMDSv2 获取公网 IPv4
+    # =====================================================
 
-    IP=$(printf '%s' "$IP" | tr -d '\r\n ')
+    TOKEN=$(curl -sS \
+        --connect-timeout 2 \
+        --max-time 3 \
+        -X PUT \
+        "http://169.254.169.254/latest/api/token" \
+        -H "X-aws-ec2-metadata-token-ttl-seconds: 60" \
+        2>/tmp/ddns-imds-token.err
+    )
 
-    if ! check_ipv4 "$IP"; then
-        return 1
+    if [ $? -eq 0 ] && [ -n "$TOKEN" ]; then
+
+        IP=$(curl -sS \
+            --connect-timeout 2 \
+            --max-time 3 \
+            -H "X-aws-ec2-metadata-token: ${TOKEN}" \
+            "http://169.254.169.254/latest/meta-data/public-ipv4" \
+            2>/tmp/ddns-imds-ip.err
+        )
+
+        IP=$(printf '%s' "$IP" | tr -d '\r\n ')
+
+        if check_ipv4 "$IP"; then
+            printf '%s' "$IP"
+            return 0
+        fi
     fi
 
-    printf '%s' "$IP"
+
+    # =====================================================
+    # 2. AWS Metadata 获取失败
+    #    使用公网接口兜底
+    # =====================================================
+
+    local IP_SOURCES=(
+        "https://api.ipify.org"
+        "https://ipv4.icanhazip.com"
+        "https://4.ident.me"
+    )
+
+    for URL in "${IP_SOURCES[@]}"; do
+
+        ERR=$(mktemp)
+
+        IP=$(curl \
+            -4 \
+            -sS \
+            --connect-timeout 5 \
+            --max-time 8 \
+            "$URL" \
+            2>"$ERR"
+        )
+
+        CURL_STATUS=$?
+
+        IP=$(printf '%s' "$IP" | tr -d '\r\n ')
+
+        if [ "$CURL_STATUS" -eq 0 ] && check_ipv4 "$IP"; then
+            rm -f "$ERR"
+            printf '%s' "$IP"
+            return 0
+        fi
+
+        if [ -s "$ERR" ]; then
+            log "WAN-WARN" "${URL} 获取失败: $(cat "$ERR")"
+        fi
+
+        rm -f "$ERR"
+    done
+
+
+    # =====================================================
+    # 全部失败
+    # =====================================================
+
+    log "WAN-ERROR" "AWS Metadata 和所有公网 IPv4 接口均获取失败"
+
+    return 1
 }
 
 
