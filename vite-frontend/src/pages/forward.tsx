@@ -576,12 +576,11 @@ export default function ForwardPage() {
 
   // 处理隧道选择变化
   const handleTunnelChange = (tunnelId: string) => {
-    const tunnel = tunnels.find(t => t.id === parseInt(tunnelId));
+    const tunnel = tunnels.find(t => Number(t.id) === Number(tunnelId));
     setSelectedTunnel(tunnel || null);
     setForm(prev => ({
       ...prev,
-      tunnelId: parseInt(tunnelId),
-      proxyProtocol: prev.proxyProtocol
+      tunnelId: Number(tunnelId)
     }));
   };
 

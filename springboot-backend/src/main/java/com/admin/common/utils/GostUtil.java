@@ -79,7 +79,7 @@ public class GostUtil {
         return isSuccess(tcpResult) ? tcpResult : udpResult;
     }
 
-    public static GostDto AddRemoteService(Long node_id, String name, Integer out_port, String remoteAddr, String protocol, String strategy, String interfaceName, Integer proxyProtocol) {
+    public static GostDto AddRemoteService(Long node_id, String name, Integer out_port, String remoteAddr, String protocol, String strategy, String interfaceName) {
         JSONObject data = new JSONObject();
         data.put("name", name + "_tls");
         data.put("addr", ":" + out_port);
@@ -125,7 +125,7 @@ public class GostUtil {
         return WebSocketServer.send_msg(node_id, services, "AddService");
     }
 
-    public static GostDto UpdateRemoteService(Long node_id, String name, Integer out_port, String remoteAddr, String protocol, String strategy, String interfaceName, Integer proxyProtocol) {
+    public static GostDto UpdateRemoteService(Long node_id, String name, Integer out_port, String remoteAddr, String protocol, String strategy, String interfaceName) {
         JSONObject data = new JSONObject();
         data.put("name", name + "_tls");
         data.put("addr", ":" + out_port);
