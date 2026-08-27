@@ -1,6 +1,7 @@
 package com.admin.service.impl;
 
 import com.admin.common.dto.ForwardDto;
+import com.admin.common.dto.ForwardBatchProxyProtocolDto;
 import com.admin.common.dto.ForwardUpdateDto;
 import com.admin.common.dto.ForwardWithTunnelDto;
 import com.admin.common.dto.GostDto;
@@ -240,6 +241,74 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         // 9. 保存更新
         boolean result = this.updateById(updatedForward);
         return result ? R.ok("端口转发更新成功") : R.err("端口转发更新失败");
+    }
+
+    @Override
+    public R batchUpdateProxyProtocol(ForwardBatchProxyProtocolDto dto) {
+        UserInfo currentUser = getCurrentUserInfo();
+        List<Map<String, Object>> failures = new ArrayList<>();
+        int successCount = 0;
+
+        for (Long id : new LinkedHashSet<>(dto.getIds())) {
+            Forward forward = validateForwardExists(id, currentUser);
+            if (forward == null) {
+                failures.add(batchFailure(id, "转发不存在或无权操作"));
+                continue;
+            }
+
+            Tunnel tunnel = validateTunnel(forward.getTunnelId());
+            if (tunnel == null) {
+                failures.add(batchFailure(id, "隧道不存在"));
+                continue;
+            }
+
+            NodeInfo nodeInfo = getRequiredNodes(tunnel);
+            if (nodeInfo.isHasError()) {
+                failures.add(batchFailure(id, nodeInfo.getErrorMessage()));
+                continue;
+            }
+
+            UserTunnel userTunnel = getUserTunnel(forward.getUserId(), tunnel.getId().intValue());
+            Integer limiter = userTunnel == null ? null : userTunnel.getSpeedId();
+            Integer previousProxyProtocol = forward.getProxyProtocol();
+            Integer previousStatus = forward.getStatus();
+            forward.setProxyProtocol(dto.getProxyProtocol());
+            forward.setUpdatedTime(System.currentTimeMillis());
+
+            R gostResult = updateGostServices(forward, tunnel, limiter, nodeInfo, userTunnel);
+            if (gostResult.getCode() != 0) {
+                forward.setProxyProtocol(previousProxyProtocol);
+                forward.setStatus(previousStatus);
+                this.updateById(forward);
+                failures.add(batchFailure(id, gostResult.getMsg()));
+                continue;
+            }
+
+            if (!this.updateById(forward)) {
+                failures.add(batchFailure(id, "数据库更新失败"));
+                continue;
+            }
+            successCount++;
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("successCount", successCount);
+        result.put("failureCount", failures.size());
+        result.put("failures", failures);
+
+        if (failures.isEmpty()) {
+            return R.ok(result);
+        }
+        R response = R.err("成功 " + successCount + " 个，失败 " + failures.size() + " 个");
+        response.setData(result);
+        return response;
+    }
+
+    private Map<String, Object> batchFailure(Long id, String message) {
+        Map<String, Object> failure = new LinkedHashMap<>();
+        failure.put("id", id);
+        failure.put("message", message);
+        return failure;
     }
 
     @Override

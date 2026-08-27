@@ -1,6 +1,7 @@
 package com.admin.service;
 
 import com.admin.common.dto.ForwardDto;
+import com.admin.common.dto.ForwardBatchProxyProtocolDto;
 import com.admin.common.dto.ForwardUpdateDto;
 import com.admin.common.lang.R;
 import com.admin.entity.Forward;
@@ -36,6 +37,8 @@ public interface ForwardService extends IService<Forward> {
      * @return 结果
      */
     R updateForward(ForwardUpdateDto forwardUpdateDto);
+
+    R batchUpdateProxyProtocol(ForwardBatchProxyProtocolDto dto);
 
     /**
      * 删除端口转发

@@ -36,6 +36,7 @@ import {
   createForward, 
   getForwardList, 
   updateForward, 
+  batchUpdateForwardProxyProtocol,
   deleteForward,
   forceDeleteForward,
   userTunnel, 
@@ -165,6 +166,11 @@ export default function ForwardPage() {
   const [forwardToDelete, setForwardToDelete] = useState<Forward | null>(null);
   const [currentDiagnosisForward, setCurrentDiagnosisForward] = useState<Forward | null>(null);
   const [diagnosisResult, setDiagnosisResult] = useState<DiagnosisResult | null>(null);
+  const [batchMode, setBatchMode] = useState(false);
+  const [selectedForwardIds, setSelectedForwardIds] = useState<Set<number>>(new Set());
+  const [batchProxyModalOpen, setBatchProxyModalOpen] = useState(false);
+  const [batchProxyProtocol, setBatchProxyProtocol] = useState(0);
+  const [batchProxyLoading, setBatchProxyLoading] = useState(false);
   const [addressModalTitle, setAddressModalTitle] = useState('');
   const [addressList, setAddressList] = useState<AddressItem[]>([]);
   
@@ -204,6 +210,58 @@ export default function ForwardPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const toggleForwardSelection = (id: number) => {
+    setSelectedForwardIds(previous => {
+      const next = new Set(previous);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAllForwards = () => {
+    const allIds = forwards.map(forward => forward.id);
+    const allSelected = allIds.length > 0 && allIds.every(id => selectedForwardIds.has(id));
+    setSelectedForwardIds(allSelected ? new Set() : new Set(allIds));
+  };
+
+  const exitBatchMode = () => {
+    setBatchMode(false);
+    setSelectedForwardIds(new Set());
+  };
+
+  const handleBatchProxyProtocol = async () => {
+    if (selectedForwardIds.size === 0) {
+      toast.error('请至少选择一个转发');
+      return;
+    }
+
+    setBatchProxyLoading(true);
+    try {
+      const response = await batchUpdateForwardProxyProtocol({
+        ids: Array.from(selectedForwardIds),
+        proxyProtocol: batchProxyProtocol,
+      });
+      if (response.code === 0) {
+        toast.success(`已更新 ${selectedForwardIds.size} 个转发`);
+        setBatchProxyModalOpen(false);
+        exitBatchMode();
+        await loadData(false);
+      } else {
+        toast.error(response.msg || '批量修改失败');
+        await loadData(false);
+      }
+    } catch (error) {
+      console.error('批量修改 PROXY Protocol 失败:', error);
+      toast.error('批量修改失败');
+    } finally {
+      setBatchProxyLoading(false);
+    }
+  };
 
   // 切换显示模式并保存到localStorage
   const handleViewModeChange = () => {
@@ -1185,15 +1243,31 @@ export default function ForwardPage() {
     const strategyDisplay = getStrategyDisplay(forward.strategy);
     
     return (
-      <Card key={forward.id} className="group shadow-sm border border-divider hover:shadow-md transition-shadow duration-200">
+      <Card
+        key={forward.id}
+        className={`group shadow-sm border hover:shadow-md transition-shadow duration-200 ${
+          selectedForwardIds.has(forward.id) ? 'border-primary ring-2 ring-primary/20' : 'border-divider'
+        }`}
+      >
         <CardHeader className="pb-2">
           <div className="flex justify-between items-start w-full">
-            <div className="flex-1 min-w-0">
+            <div className="flex items-start gap-2 flex-1 min-w-0">
+              {batchMode && (
+                <input
+                  type="checkbox"
+                  aria-label={`选择转发 ${forward.name}`}
+                  checked={selectedForwardIds.has(forward.id)}
+                  onChange={() => toggleForwardSelection(forward.id)}
+                  className="mt-0.5 h-4 w-4 accent-primary cursor-pointer flex-shrink-0"
+                />
+              )}
+              <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-foreground truncate text-sm">{forward.name}</h3>
               <p className="text-xs text-default-500 truncate">{forward.tunnelName}</p>
+              </div>
             </div>
             <div className="flex items-center gap-1.5 ml-2">
-              {viewMode === 'direct' && (
+              {viewMode === 'direct' && !batchMode && (
                 <div 
                   className={`cursor-grab active:cursor-grabbing p-2 text-default-400 hover:text-default-600 transition-colors touch-manipulation ${
                     isMobile 
@@ -1213,7 +1287,7 @@ export default function ForwardPage() {
                 size="sm"
                 isSelected={forward.serviceRunning}
                 onValueChange={() => handleServiceToggle(forward)}
-                isDisabled={forward.status !== 1 && forward.status !== 0}
+                isDisabled={batchMode || (forward.status !== 1 && forward.status !== 0)}
               />
               <Chip 
                 color={statusDisplay.color as any} 
@@ -1281,6 +1355,9 @@ export default function ForwardPage() {
               <Chip color={strategyDisplay.color as any} variant="flat" size="sm" className="text-xs">
                 {strategyDisplay.text}
               </Chip>
+              <Chip variant="flat" size="sm" className="text-xs" color={forward.proxyProtocol ? 'secondary' : 'default'}>
+                {forward.proxyProtocol ? `PROXY v${forward.proxyProtocol}` : 'PROXY 关闭'}
+              </Chip>
               <div className="flex items-center gap-1">
                 <Chip variant="flat" size="sm" className="text-xs" color="primary">
                   ↑{formatFlow(forward.inFlow || 0)}
@@ -1293,7 +1370,7 @@ export default function ForwardPage() {
             </div>
           </div>
           
-          <div className="flex gap-1.5 mt-3">
+          <div className={`flex gap-1.5 mt-3 ${batchMode ? 'opacity-50 pointer-events-none' : ''}`}>
             <Button
               size="sm"
               variant="flat"
@@ -1366,6 +1443,17 @@ export default function ForwardPage() {
           <div className="flex-1">
           </div>
           <div className="flex items-center gap-3">
+            {!batchMode && (
+              <Button
+                size="sm"
+                variant="flat"
+                color="secondary"
+                onPress={() => setBatchMode(true)}
+                isDisabled={forwards.length === 0}
+              >
+                批量管理
+              </Button>
+            )}
             {/* 显示模式切换按钮 */}
             <Button
               size="sm"
@@ -1422,6 +1510,34 @@ export default function ForwardPage() {
         
           </div>
         </div>
+
+        {batchMode && (
+          <Card className="mb-6 border border-primary/30 bg-primary-50/50 dark:bg-primary-900/10">
+            <CardBody className="py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm text-foreground">
+                  已选择 <span className="font-semibold text-primary">{selectedForwardIds.size}</span> 个转发
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="flat" onPress={toggleSelectAllForwards}>
+                    {forwards.length > 0 && forwards.every(forward => selectedForwardIds.has(forward.id)) ? '取消全选' : '全选'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    color="primary"
+                    onPress={() => setBatchProxyModalOpen(true)}
+                    isDisabled={selectedForwardIds.size === 0}
+                  >
+                    修改 PROXY Protocol
+                  </Button>
+                  <Button size="sm" variant="light" onPress={exitBatchMode}>
+                    退出批量模式
+                  </Button>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        )}
 
 
         {/* 根据显示模式渲染不同内容 */}
@@ -1693,6 +1809,54 @@ export default function ForwardPage() {
                     isLoading={submitLoading}
                   >
                     {isEdit ? '保存修改' : '创建转发'}
+                  </Button>
+                </ModalFooter>
+              </>
+            )}
+          </ModalContent>
+        </Modal>
+
+        <Modal
+          isOpen={batchProxyModalOpen}
+          onOpenChange={setBatchProxyModalOpen}
+          size="md"
+          backdrop="blur"
+          placement="center"
+        >
+          <ModalContent>
+            {(onClose) => (
+              <>
+                <ModalHeader className="flex flex-col gap-1">
+                  <h2 className="text-xl font-bold">批量修改 PROXY Protocol</h2>
+                  <p className="text-small font-normal text-default-500">
+                    将同步更新已选择的 {selectedForwardIds.size} 个转发及其节点配置
+                  </p>
+                </ModalHeader>
+                <ModalBody>
+                  <Select
+                    label="是否启用及协议类型"
+                    selectedKeys={[batchProxyProtocol.toString()]}
+                    onSelectionChange={(keys) => {
+                      const selectedKey = Array.from(keys)[0] as string;
+                      if (selectedKey) {
+                        setBatchProxyProtocol(Number(selectedKey));
+                      }
+                    }}
+                    variant="bordered"
+                    description="仅对 TCP 生效，目标服务必须支持相同版本"
+                  >
+                    <SelectItem key="0">关闭 PROXY Protocol</SelectItem>
+                    <SelectItem key="1">启用 PROXY Protocol v1</SelectItem>
+                    <SelectItem key="2">启用 PROXY Protocol v2</SelectItem>
+                  </Select>
+                  <Alert color="warning" variant="flat">
+                    目标服务未启用对应协议时，连接数据可能无法正常解析。
+                  </Alert>
+                </ModalBody>
+                <ModalFooter>
+                  <Button variant="light" onPress={onClose}>取消</Button>
+                  <Button color="primary" onPress={handleBatchProxyProtocol} isLoading={batchProxyLoading}>
+                    确认修改
                   </Button>
                 </ModalFooter>
               </>

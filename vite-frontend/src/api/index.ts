@@ -53,6 +53,8 @@ export const userTunnel = () => Network.post("/tunnel/user/tunnel");
 export const createForward = (data: any) => Network.post("/forward/create", data);
 export const getForwardList = () => Network.post("/forward/list");
 export const updateForward = (data: any) => Network.post("/forward/update", data);
+export const batchUpdateForwardProxyProtocol = (data: { ids: number[]; proxyProtocol: number }) =>
+  Network.post("/forward/batch-proxy-protocol", data, 120000);
 export const deleteForward = (id: number) => Network.post("/forward/delete", { id });
 export const forceDeleteForward = (id: number) => Network.post("/forward/force-delete", { id });
 
@@ -88,4 +90,4 @@ export const updateConfig = (name: string, value: string) => Network.post("/conf
 // 验证码相关接口
 export const checkCaptcha = () => Network.post("/captcha/check");
 export const generateCaptcha = () => Network.post(`/captcha/generate`);
-export const verifyCaptcha = (data: { captchaId: string; trackData: string }) => Network.post("/captcha/verify", data); 
+export const verifyCaptcha = (data: { captchaId: string; trackData: string }) => Network.post("/captcha/verify", data);
