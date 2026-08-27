@@ -1470,6 +1470,56 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         updateGostServices(forward, tunnel, limiter, nodeInfo, userTunnel);
     }
 
+    @Override
+    public R syncForwardToNode(Forward forward, Long nodeId) {
+        Tunnel tunnel = validateTunnel(forward.getTunnelId());
+        if (tunnel == null) {
+            return R.err("隧道不存在");
+        }
+
+        UserTunnel userTunnel = getUserTunnel(forward.getUserId(), tunnel.getId().intValue());
+        Integer limiter = userTunnel == null ? null : userTunnel.getSpeedId();
+        String serviceName = buildServiceName(forward.getId(), forward.getUserId(), userTunnel);
+
+        if (Objects.equals(tunnel.getInNodeId(), nodeId)) {
+            Node inNode = nodeService.getNodeById(nodeId);
+            if (inNode == null) {
+                return R.err("入口节点不存在");
+            }
+
+            if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
+                R chainResult = updateChainService(inNode, serviceName, tunnel.getOutIp(),
+                        forward.getOutPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
+                if (chainResult.getCode() != 0) {
+                    return chainResult;
+                }
+            }
+
+            String interfaceName = tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD
+                    ? null : forward.getInterfaceName();
+            R serviceResult = updateMainService(inNode, serviceName, forward, limiter,
+                    tunnel.getType(), tunnel, forward.getStrategy(), interfaceName);
+            if (serviceResult.getCode() != 0) {
+                return serviceResult;
+            }
+        }
+
+        if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD
+                && Objects.equals(tunnel.getOutNodeId(), nodeId)) {
+            Node outNode = nodeService.getNodeById(nodeId);
+            if (outNode == null) {
+                return R.err("出口节点不存在");
+            }
+            R remoteResult = updateRemoteService(outNode, serviceName, forward,
+                    tunnel.getProtocol(), forward.getInterfaceName());
+            if (remoteResult.getCode() != 0) {
+                return remoteResult;
+            }
+        }
+
+        return R.ok();
+    }
+
 
     // ========== 内部数据类 ==========
 

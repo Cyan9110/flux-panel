@@ -14,8 +14,12 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -49,7 +53,74 @@ public class CheckGostConfigAsync {
             cleanOrphanedServices(gostConfig, node);
             cleanOrphanedChains(gostConfig, node);
             cleanOrphanedLimiters(gostConfig, node);
+            syncLimiters(gostConfig, node);
+            syncMissingForwards(gostConfig, node);
         }
+    }
+
+    /**
+     * 新节点或配置丢失的节点上线后，根据数据库补齐其应承担的转发组件。
+     */
+    private void syncMissingForwards(GostConfigDto gostConfig, Node node) {
+        Map<Long, Tunnel> relatedTunnels = new LinkedHashMap<>();
+        tunnelService.list(new QueryWrapper<Tunnel>().eq("in_node_id", node.getId()))
+                .forEach(tunnel -> relatedTunnels.put(tunnel.getId(), tunnel));
+        tunnelService.list(new QueryWrapper<Tunnel>().eq("out_node_id", node.getId()))
+                .forEach(tunnel -> relatedTunnels.put(tunnel.getId(), tunnel));
+
+        if (relatedTunnels.isEmpty()) {
+            return;
+        }
+
+        Set<String> serviceNames = configNames(gostConfig.getServices());
+        Set<String> chainNames = configNames(gostConfig.getChains());
+        List<Forward> forwards = forwardService.list(new QueryWrapper<Forward>()
+                .in("tunnel_id", relatedTunnels.keySet())
+                .eq("status", 1));
+
+        for (Forward forward : forwards) {
+            Tunnel tunnel = relatedTunnels.get(forward.getTunnelId().longValue());
+            if (tunnel == null) {
+                continue;
+            }
+
+            String prefix = forward.getId() + "_" + forward.getUserId() + "_";
+            boolean missing = false;
+            if (Objects.equals(tunnel.getInNodeId(), node.getId())) {
+                boolean missingMainService = !containsName(serviceNames, prefix, "_tcp")
+                        || !containsName(serviceNames, prefix, "_udp");
+                boolean missingChain = tunnel.getType() == 2
+                        && !containsName(chainNames, prefix, "_chains");
+                missing = missingMainService || missingChain;
+            }
+            if (tunnel.getType() == 2 && Objects.equals(tunnel.getOutNodeId(), node.getId())) {
+                missing = missing || !containsName(serviceNames, prefix, "_tls");
+            }
+
+            if (missing) {
+                safeExecute(() -> {
+                    R result = forwardService.syncForwardToNode(forward, node.getId());
+                    if (result.getCode() != 0) {
+                        throw new IllegalStateException(result.getMsg());
+                    }
+                    log.info("节点 {} 自动补齐转发配置: {}", node.getId(), forward.getId());
+                }, "同步转发 " + forward.getId() + " 到节点 " + node.getId());
+            }
+        }
+    }
+
+    private Set<String> configNames(List<ConfigItem> items) {
+        if (items == null) {
+            return java.util.Collections.emptySet();
+        }
+        return items.stream()
+                .map(ConfigItem::getName)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    private boolean containsName(Set<String> names, String prefix, String suffix) {
+        return names.stream().anyMatch(name -> name.startsWith(prefix) && name.endsWith(suffix));
     }
 
     /**

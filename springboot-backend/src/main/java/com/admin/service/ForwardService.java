@@ -85,4 +85,10 @@ public interface ForwardService extends IService<Forward> {
 
 
     void updateForwardA(Forward forward);
+
+    /**
+     * 将单条转发配置定向同步到指定节点。
+     * 仅更新该节点承担的入口或出口组件，缺失时自动创建。
+     */
+    R syncForwardToNode(Forward forward, Long nodeId);
 }
