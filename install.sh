@@ -1,6 +1,19 @@
 #!/bin/bash
-# 下载地址
-DOWNLOAD_URL="https://github.com/Cyan9110/flux-panel/releases/download/gost-latest/gost"
+# 根据系统架构选择 Linux 二进制
+case "$(uname -m)" in
+  x86_64|amd64)
+    GOST_ASSET="gost-linux-amd64"
+    ;;
+  aarch64|arm64)
+    GOST_ASSET="gost-linux-arm64"
+    ;;
+  *)
+    echo "❌ 不支持的系统架构: $(uname -m)"
+    exit 1
+    ;;
+esac
+
+DOWNLOAD_URL="https://github.com/Cyan9110/flux-panel/releases/download/gost-latest/$GOST_ASSET"
 INSTALL_DIR="/etc/gost"
 COUNTRY=$(curl -s https://ipinfo.io/country)
 if [ "$COUNTRY" = "CN" ]; then
@@ -148,17 +161,22 @@ install_gost() {
     systemctl disable gost 2>/dev/null && echo "🚫 禁用自启"
   fi
 
-  # 删除旧文件
-  [[ -f "$INSTALL_DIR/gost" ]] && echo "🧹 删除旧文件 gost" && rm -f "$INSTALL_DIR/gost"
-
   # 下载 gost
   echo "⬇️ 下载 gost 中..."
-  curl -L "$DOWNLOAD_URL" -o "$INSTALL_DIR/gost"
-  if [[ ! -f "$INSTALL_DIR/gost" || ! -s "$INSTALL_DIR/gost" ]]; then
+  GOST_TMP="$INSTALL_DIR/gost.download"
+  rm -f "$GOST_TMP"
+  if ! curl --fail --location --retry 3 "$DOWNLOAD_URL" -o "$GOST_TMP"; then
     echo "❌ 下载失败，请检查网络或下载链接。"
+    rm -f "$GOST_TMP"
     exit 1
   fi
-  chmod +x "$INSTALL_DIR/gost"
+  chmod +x "$GOST_TMP"
+  if ! "$GOST_TMP" -V >/dev/null 2>&1; then
+    echo "❌ 下载的 gost 无法在当前系统运行，请检查系统架构或发布文件。"
+    rm -f "$GOST_TMP"
+    exit 1
+  fi
+  mv -f "$GOST_TMP" "$INSTALL_DIR/gost"
   echo "✅ 下载完成"
 
   # 打印版本
