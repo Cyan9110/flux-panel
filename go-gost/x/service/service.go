@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -53,15 +52,6 @@ var isSocks = 0
 var needWrap = false
 
 type Option func(opts *options)
-
-func init() {
-	_, err := LoadConfig("config.json")
-	fmt.Println("config.json loaded")
-	if err != nil {
-		log.Fatal(err)
-	}
-	needWrap = isTls+isSocks+isHttp > 0
-}
 
 func AdmissionOption(admission admission.Admission) Option {
 	return func(opts *options) {
@@ -576,6 +566,7 @@ func LoadConfig(configPath string) (string, error) {
 	isTls = config.Tls
 	isSocks = config.Socks
 	isHttp = config.Http
+	needWrap = isTls+isSocks+isHttp > 0
 
 	return "", nil
 
