@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
@@ -208,12 +208,44 @@ export default function ForwardPage() {
   // 表单验证错误
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [selectedTunnel, setSelectedTunnel] = useState<Tunnel | null>(null);
+  const selectionScrollPositionRef = useRef<{
+    element: Element;
+    left: number;
+    top: number;
+  } | null>(null);
+
+  const rememberSelectionScrollPosition = () => {
+    const main = document.querySelector('main');
+    const mainOverflowY = main ? window.getComputedStyle(main).overflowY : '';
+    const element = main && (mainOverflowY === 'auto' || mainOverflowY === 'scroll')
+      ? main
+      : document.scrollingElement;
+
+    if (element) {
+      selectionScrollPositionRef.current = {
+        element,
+        left: element.scrollLeft,
+        top: element.scrollTop,
+      };
+    }
+  };
+
+  useLayoutEffect(() => {
+    const position = selectionScrollPositionRef.current;
+    if (!position) {
+      return;
+    }
+
+    position.element.scrollTo(position.left, position.top);
+    selectionScrollPositionRef.current = null;
+  }, [selectedForwardIds]);
 
   useEffect(() => {
     loadData();
   }, []);
 
   const toggleForwardSelection = (id: number) => {
+    rememberSelectionScrollPosition();
     setSelectedForwardIds(previous => {
       const next = new Set(previous);
       if (next.has(id)) {
@@ -226,6 +258,7 @@ export default function ForwardPage() {
   };
 
   const toggleSelectAllForwards = () => {
+    rememberSelectionScrollPosition();
     const allIds = forwards.map(forward => forward.id);
     const allSelected = allIds.length > 0 && allIds.every(id => selectedForwardIds.has(id));
     setSelectedForwardIds(allSelected ? new Set() : new Set(allIds));
