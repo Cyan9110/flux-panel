@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -60,6 +61,13 @@ func GetInt(md metadata.Metadata, keys ...string) (v int) {
 			}
 		case int:
 			v = vv
+		case float32:
+			v = int(vv)
+		case float64:
+			v = int(vv)
+		case json.Number:
+			value, _ := vv.Int64()
+			v = int(value)
 		case string:
 			v, _ = strconv.Atoi(vv)
 		}

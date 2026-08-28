@@ -180,21 +180,32 @@ public class GostUtil {
     }
 
     public static GostDto PauseService(Long node_id, String name) {
-        JSONObject data = new JSONObject();
-        JSONArray services = new JSONArray();
-        services.add(name + "_tcp");
-        services.add(name + "_udp");
-        data.put("services", services);
-        return WebSocketServer.send_msg(node_id, data, "PauseService");
+        return changeMainServiceState(node_id, name, "PauseService");
     }
 
     public static GostDto ResumeService(Long node_id, String name) {
+        return changeMainServiceState(node_id, name, "ResumeService");
+    }
+
+    private static GostDto changeMainServiceState(Long nodeId, String name, String action) {
+        GostDto tcpResult = changeSingleServiceState(nodeId, name + "_tcp", action);
+        if (!isSuccess(tcpResult) && !isNotFound(tcpResult)) {
+            return tcpResult;
+        }
+
+        GostDto udpResult = changeSingleServiceState(nodeId, name + "_udp", action);
+        if (!isSuccess(udpResult) && !isNotFound(udpResult)) {
+            return udpResult;
+        }
+        return isSuccess(tcpResult) ? tcpResult : udpResult;
+    }
+
+    private static GostDto changeSingleServiceState(Long nodeId, String serviceName, String action) {
         JSONObject data = new JSONObject();
         JSONArray services = new JSONArray();
-        services.add(name + "_tcp");
-        services.add(name + "_udp");
+        services.add(serviceName);
         data.put("services", services);
-        return WebSocketServer.send_msg(node_id, data, "ResumeService");
+        return WebSocketServer.send_msg(nodeId, data, action);
     }
 
     public static GostDto PauseRemoteService(Long node_id, String name) {
