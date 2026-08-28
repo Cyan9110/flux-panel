@@ -1,0 +1,76 @@
+name: Build and publish GOST node binaries
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            asset: gost-linux-amd64
+          - goarch: arm64
+            asset: gost-linux-arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go-gost/go.mod
+          cache-dependency-path: |
+            go-gost/go.sum
+            go-gost/x/go.sum
+
+      - name: Test Proxy Protocol packages
+        working-directory: go-gost/x
+        run: go test ./metadata/util ./handler/forward/local ./connector/relay ./handler/relay ./internal/net/proxyproto
+
+      - name: Build ${{ matrix.asset }}
+        working-directory: go-gost
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -trimpath -ldflags="-s -w" -o "../${{ matrix.asset }}" .
+
+      - name: Verify binary
+        run: |
+          file "${{ matrix.asset }}"
+          sha256sum "${{ matrix.asset }}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gost-linux-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish checksums
+        working-directory: dist
+        run: sha256sum gost-linux-amd64 gost-linux-arm64 | tee SHA256SUMS
+
+      - name: Replace gost-latest release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload gost-latest dist/gost-linux-amd64 dist/gost-linux-arm64 dist/SHA256SUMS --clobber --repo "${{ github.repository }}"
