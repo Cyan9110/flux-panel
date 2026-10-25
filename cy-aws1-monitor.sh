@@ -86,3 +86,60 @@ if [[ -z "$INSTANCE_ID" ]]; then
 fi
 
 [[ "$INSTANCE_ID" =~ ^i-[A-Za-z0-9]+$ ]] \
+    || die "INSTANCE_ID 格式不正确：${INSTANCE_ID}"
+
+IP_API_URL="${API_BASE_URL}/api/ec2-instances/${INSTANCE_ID}/ip-address"
+
+log "目标区域：${REGION_NAME}"
+log "目标实例：${INSTANCE_ID}"
+log "提交一次 IP 更换请求：${IP_API_URL}"
+
+REQUEST_BODY="$(
+    jq -n \
+        --argjson static "$STATIC_IP" \
+        --argjson gfw_blocked_check "$GFW_BLOCKED_CHECK" \
+        --argjson port "$GFW_BLOCKED_CHECK_PORT" \
+        --arg cron "$GFW_BLOCKED_CHECK_CRON" \
+        '{
+            static: $static,
+            gfw_blocked_check: $gfw_blocked_check,
+            gfw_blocked_check_port: $port,
+            gfw_blocked_check_cron: $cron
+        }'
+)"
+
+HTTP_RESULT="$(
+    curl --silent --show-error \
+        --request PATCH \
+        --header 'accept: application/json, text/plain, */*' \
+        --header 'accept-language: zh-CN,zh;q=0.9,en;q=0.8' \
+        --header 'cache-control: no-cache' \
+        --header 'content-type: application/json' \
+        --header 'pragma: no-cache' \
+        --header 'priority: u=1, i' \
+        --header 'sec-ch-ua: "Chromium";v="152", "Not?A_Brand";v="24", "Google Chrome";v="152"' \
+        --header 'sec-ch-ua-mobile: ?0' \
+        --header 'sec-ch-ua-platform: "macOS"' \
+        --header 'sec-fetch-dest: empty' \
+        --header 'sec-fetch-mode: cors' \
+        --header 'sec-fetch-site: same-origin' \
+        --header "x-region-name: ${REGION_NAME}" \
+        --header "x-share-group-token: ${SHARE_GROUP_TOKEN}" \
+        --data "$REQUEST_BODY" \
+        --write-out $'\n%{http_code}' \
+        "$IP_API_URL"
+)" || die "PATCH 请求失败：curl 无法完成请求。"
+
+HTTP_STATUS="${HTTP_RESULT##*$'\n'}"
+RESPONSE_BODY="${HTTP_RESULT%$'\n'*}"
+
+printf '\n'
+log "HTTP 状态码：${HTTP_STATUS}"
+log "服务器响应："
+printf '%s\n' "$RESPONSE_BODY"
+
+if [[ ! "$HTTP_STATUS" =~ ^2[0-9][0-9]$ ]]; then
+    die "IP 更换请求未成功，HTTP ${HTTP_STATUS}。"
+fi
+
+log "请求已被服务器接受。此脚本只提交一次 PATCH，不会自动重试，也不会等待 DNS IP 变化。"
