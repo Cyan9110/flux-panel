@@ -50,12 +50,9 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      LOG_DIR: /app/logs
       JAVA_OPTS: "-Xms256m -Xmx512m -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai"
     ports:
       - "${BACKEND_PORT}:6365"
-    volumes:
-      - backend_logs:/app/logs
     depends_on:
       mysql:
         condition: service_healthy
@@ -85,11 +82,6 @@ volumes:
   mysql_data:
     name: mysql_data
     driver: local
-  backend_logs:
-    name: backend_logs
-    driver: local
-
-
 networks:
   gost-network:
     name: gost-network
