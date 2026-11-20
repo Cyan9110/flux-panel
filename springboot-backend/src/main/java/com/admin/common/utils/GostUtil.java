@@ -18,6 +18,84 @@ public class GostUtil {
         return WebSocketServer.send_msg(node_id, data, "AddLimiters");
     }
 
+    public static JSONObject BuildLimiter(Long name, String speed) {
+        return createLimiterData(name, speed);
+    }
+
+    public static JSONArray BuildServices(String name, Integer inPort, Integer limiter,
+                                          String remoteAddr, Integer forwardType, Tunnel tunnel,
+                                          String strategy, String interfaceName, Integer proxyProtocol) {
+        JSONArray services = new JSONArray();
+        String[] protocols = shouldIncludeUdp(proxyProtocol) ? new String[]{"tcp", "udp"} : new String[]{"tcp"};
+        for (String protocol : protocols) {
+            services.add(createServiceConfig(name, inPort, limiter, remoteAddr, protocol,
+                    forwardType, tunnel, strategy, interfaceName, proxyProtocol));
+        }
+        return services;
+    }
+
+    public static JSONObject BuildRemoteService(String name, Integer outPort, String remoteAddr,
+                                                String protocol, String strategy, String interfaceName) {
+        JSONObject data = new JSONObject();
+        data.put("name", name + "_tls");
+        data.put("addr", ":" + outPort);
+        if (StringUtils.isNotBlank(interfaceName)) {
+            JSONObject metadata = new JSONObject();
+            metadata.put("interface", interfaceName);
+            data.put("metadata", metadata);
+        }
+        JSONObject handler = new JSONObject();
+        handler.put("type", "relay");
+        data.put("handler", handler);
+        JSONObject listener = new JSONObject();
+        listener.put("type", protocol);
+        data.put("listener", listener);
+        data.put("forwarder", createForwarder(remoteAddr, strategy));
+        return data;
+    }
+
+    public static JSONObject BuildChain(String name, String remoteAddr, String protocol, String interfaceName) {
+        JSONObject dialer = new JSONObject();
+        dialer.put("type", protocol);
+        if (Objects.equals(protocol, "quic")) {
+            JSONObject metadata = new JSONObject();
+            metadata.put("keepAlive", true);
+            metadata.put("ttl", "10s");
+            dialer.put("metadata", metadata);
+        }
+        JSONObject connector = new JSONObject();
+        connector.put("type", "relay");
+        JSONObject node = new JSONObject();
+        node.put("name", "node-" + name);
+        node.put("addr", remoteAddr);
+        node.put("connector", connector);
+        node.put("dialer", dialer);
+        if (StringUtils.isNotBlank(interfaceName)) {
+            node.put("interface", interfaceName);
+        }
+        JSONArray nodes = new JSONArray();
+        nodes.add(node);
+        JSONObject hop = new JSONObject();
+        hop.put("name", "hop-" + name);
+        hop.put("nodes", nodes);
+        JSONArray hops = new JSONArray();
+        hops.add(hop);
+        JSONObject data = new JSONObject();
+        data.put("name", name + "_chains");
+        data.put("hops", hops);
+        return data;
+    }
+
+    public static GostDto BatchSync(Long nodeId, JSONArray services, JSONArray chains,
+                                    JSONArray limiters, JSONArray deleteServices) {
+        JSONObject data = new JSONObject();
+        data.put("services", services);
+        data.put("chains", chains);
+        data.put("limiters", limiters);
+        data.put("deleteServices", deleteServices);
+        return WebSocketServer.send_msg(nodeId, data, "BatchSyncConfig");
+    }
+
     public static GostDto UpdateLimiters(Long node_id, Long name, String speed) {
         JSONObject data = createLimiterData(name, speed);
         JSONObject req = new JSONObject();

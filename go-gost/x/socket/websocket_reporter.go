@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-gost/x/config"
 	"github.com/go-gost/x/internal/util/crypto"
+	"github.com/go-gost/x/registry"
 	"github.com/gorilla/websocket"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
@@ -513,6 +514,9 @@ func (w *WebSocketReporter) routeCommand(cmd CommandMessage) {
 	case "UpdateLimiters":
 		err = w.handleUpdateLimiter(cmd.Data)
 		response.Type = "UpdateLimitersResponse"
+	case "BatchSyncConfig":
+		err = w.handleBatchSyncConfig(cmd.Data)
+		response.Type = "BatchSyncConfigResponse"
 	case "DeleteLimiters":
 		err = w.handleDeleteLimiter(cmd.Data)
 		response.Type = "DeleteLimitersResponse"
@@ -541,6 +545,83 @@ func (w *WebSocketReporter) routeCommand(cmd CommandMessage) {
 	}
 
 	w.sendResponse(response)
+}
+
+// handleBatchSyncConfig 在一次 WebSocket 往返中批量补齐当前节点的配置。
+// 已存在的配置执行更新，不存在的配置执行创建。
+func (w *WebSocketReporter) handleBatchSyncConfig(data interface{}) error {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("序列化批量同步数据失败: %v", err)
+	}
+
+	var batch struct {
+		Services       []config.ServiceConfig `json:"services"`
+		Chains         []config.ChainConfig   `json:"chains"`
+		Limiters       []config.LimiterConfig `json:"limiters"`
+		DeleteServices []string               `json:"deleteServices"`
+	}
+	processedData, err := w.preprocessDurationFields(jsonData)
+	if err != nil {
+		return fmt.Errorf("预处理批量同步数据失败: %v", err)
+	}
+	if err := json.Unmarshal(processedData, &batch); err != nil {
+		return fmt.Errorf("解析批量同步数据失败: %v", err)
+	}
+
+	// 链和限流器必须先就绪，服务解析时可能会引用它们。
+	for _, chainConfig := range batch.Chains {
+		if registry.ChainRegistry().IsRegistered(chainConfig.Name) {
+			if err := updateChain(updateChainRequest{Chain: chainConfig.Name, Data: chainConfig}); err != nil {
+				return err
+			}
+		} else if err := createChain(createChainRequest{Data: chainConfig}); err != nil {
+			return err
+		}
+	}
+	for _, limiterConfig := range batch.Limiters {
+		if registry.TrafficLimiterRegistry().IsRegistered(limiterConfig.Name) {
+			if err := updateLimiter(updateLimiterRequest{Limiter: limiterConfig.Name, Data: limiterConfig}); err != nil {
+				return err
+			}
+		} else if err := createLimiter(createLimiterRequest{Data: limiterConfig}); err != nil {
+			return err
+		}
+	}
+
+	var existingServices []config.ServiceConfig
+	var newServices []config.ServiceConfig
+	for _, serviceConfig := range batch.Services {
+		if registry.ServiceRegistry().IsRegistered(serviceConfig.Name) {
+			existingServices = append(existingServices, serviceConfig)
+		} else {
+			newServices = append(newServices, serviceConfig)
+		}
+	}
+	if len(existingServices) > 0 {
+		if err := updateServices(updateServicesRequest{Data: existingServices}); err != nil {
+			return err
+		}
+	}
+	if len(newServices) > 0 {
+		if err := createServices(createServicesRequest{Data: newServices}); err != nil {
+			return err
+		}
+	}
+
+	var servicesToDelete []string
+	for _, name := range batch.DeleteServices {
+		if registry.ServiceRegistry().IsRegistered(name) {
+			servicesToDelete = append(servicesToDelete, name)
+		}
+	}
+	if len(servicesToDelete) > 0 {
+		if err := deleteServices(deleteServicesRequest{Services: servicesToDelete}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Service 命令处理函数
